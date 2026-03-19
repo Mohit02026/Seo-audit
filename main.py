@@ -7,16 +7,15 @@ from full_audit import FullTechnicalAudit
 
 app = FastAPI(title="🔥 SEO Audit API - Local Test")
 
-PAGESPEED_API_KEY = "AIzaSyCJGzOGMdzwyg7BAxLpL6mJa8OrRk4jE2I"  # your key
+PAGESPEED_API_KEY = "AIzaSyCJGzOGMdzwyg7BAxLpL6mJa8OrRk4jE2I"
 
-# simple in-memory job storage
 jobs = {}
 
 
 class AuditRequest(BaseModel):
     url: str
     lead_name: str = "Test Lead"
-    max_pages: Optional[int] = 200  # higher for real audits
+    max_pages: Optional[int] = 200
 
 
 async def run_audit_background(job_id: str, request: AuditRequest):
@@ -38,7 +37,6 @@ async def run_audit_background(job_id: str, request: AuditRequest):
 @app.post("/api/audit")
 async def queue_audit(request: AuditRequest, background_tasks: BackgroundTasks):
     import uuid
-
     job_id = str(uuid.uuid4())[:8]
 
     jobs[job_id] = {
@@ -67,12 +65,9 @@ async def get_status(job_id: str):
 
 @app.get("/test-simple/{url:path}")
 async def test_simple(url: str):
-    """
-    Quick test endpoint – 1 URL directly.
-    """
     audit = FullTechnicalAudit(
         url,
-        max_pages=200,  # good depth for SMB sites
+        max_pages=200,
         pagespeed_key=PAGESPEED_API_KEY,
     )
     results = audit.run_full_audit()
@@ -114,11 +109,9 @@ async def home():
         "try": "GET /test-simple/https://example.com",
     }
 
+
 @app.get("/summary/{url:path}")
 async def get_summary(url: str):
-    """
-    Get a text summary of the audit for a URL.
-    """
     audit = FullTechnicalAudit(
         url,
         max_pages=200,
@@ -126,12 +119,13 @@ async def get_summary(url: str):
     )
     results = audit.run_full_audit()
     summary_text = audit.generate_summary()
-    
+
     return {
         "url": url,
         "summary": summary_text,
         "content_type": "text/plain",
     }
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
