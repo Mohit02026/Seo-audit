@@ -1,4 +1,5 @@
 import requests
+import random
 from urllib.robotparser import RobotFileParser
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
@@ -8,6 +9,15 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any, Optional
+
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+]
 
 
 class FullTechnicalAudit:
@@ -27,15 +37,15 @@ class FullTechnicalAudit:
         self.threads = threads
 
         self.session = requests.Session()
-        self.session.headers.update(
-            {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/121.0.0.0 Safari/537.36"
-                )
-            }
-        )
+        self.session.headers.update({
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Cache-Control": "max-age=0",
+        })
 
         # robots.txt
         self.robot_parser = RobotFileParser()
@@ -74,6 +84,12 @@ class FullTechnicalAudit:
             return {"url": url, "skipped": "robots.txt"}
 
         try:
+            # Rotate User-Agent and random delay per request
+            self.session.headers.update({
+                "User-Agent": random.choice(USER_AGENTS)
+            })
+            time.sleep(random.uniform(0.5, 1.5))
+
             resp = self.session.get(url, timeout=10, allow_redirects=True)
             final_url = resp.url
             status = resp.status_code
@@ -114,7 +130,7 @@ class FullTechnicalAudit:
             if "nofollow" in x_robots:
                 nofollow = True
 
-            # Word count (rough)
+            # Word count
             text_content = soup.get_text(separator=" ")
             word_count = len(text_content.split())
 
@@ -153,7 +169,6 @@ class FullTechnicalAudit:
 
             with self.lock:
                 self.pages_data.append(page_data)
-                # Enqueue next internal links
                 for link in internal_links[:15]:
                     if (
                         len(self.visited) + len(self.to_visit) < self.max_pages
@@ -165,6 +180,34 @@ class FullTechnicalAudit:
 
         except Exception as e:
             return {"url": url, "error": str(e)}
+
+    # ------------------- SITEMAP FALLBACK -------------------
+
+    def fetch_sitemap_urls(self) -> List[str]:
+        """Try to get URLs from sitemap when link discovery fails."""
+        candidates = [
+            f"{self.origin}/sitemap.xml",
+            f"{self.origin}/sitemap_index.xml",
+            f"{self.origin}/sitemap-index.xml",
+            f"{self.origin}/sitemap1.xml",
+        ]
+        urls = []
+        for sitemap_url in candidates:
+            try:
+                self.session.headers.update({"User-Agent": random.choice(USER_AGENTS)})
+                resp = self.session.get(sitemap_url, timeout=10)
+                if resp.status_code == 200:
+                    soup = BeautifulSoup(resp.text, "xml")
+                    for loc in soup.find_all("loc"):
+                        u = loc.get_text().strip()
+                        if self.domain in u:
+                            urls.append(u)
+                    if urls:
+                        print(f"📋 Found {len(urls)} URLs in sitemap: {sitemap_url}")
+                        break
+            except Exception:
+                continue
+        return urls[:self.max_pages]
 
     def run_crawl(self):
         print(f"🐛 Crawling up to {self.max_pages} pages from {self.site_url}...")
@@ -178,6 +221,23 @@ class FullTechnicalAudit:
                 for f in futures:
                     f.result()
                 time.sleep(0.3)
+
+        # Sitemap fallback if link discovery was blocked
+        if len(self.pages_data) <= 1:
+            print("⚠️ Few pages via link discovery, trying sitemap fallback...")
+            sitemap_urls = self.fetch_sitemap_urls()
+            if sitemap_urls:
+                with ThreadPoolExecutor(max_workers=self.threads) as executor:
+                    futures = [
+                        executor.submit(self.crawl_page, u)
+                        for u in sitemap_urls
+                        if u not in self.visited
+                    ]
+                    for f in futures:
+                        f.result()
+            else:
+                print("⚠️ No sitemap found. Only homepage data available.")
+
         print(f"✅ Crawled {len(self.pages_data)} pages")
 
     # ------------------- ANALYSIS -------------------
@@ -196,18 +256,10 @@ class FullTechnicalAudit:
     def analyze_crawl(self):
         if not self.pages_data:
             self.results["crawl_summary"] = {
-                "total_pages": 0,
-                "status_2xx": 0,
-                "status_3xx": 0,
-                "status_4xx": 0,
-                "status_5xx": 0,
-                "redirect_chains": 0,
-                "missing_titles": 0,
-                "long_titles": 0,
-                "no_meta_desc": 0,
-                "no_h1": 0,
-                "multi_h1": 0,
-                "noindex_pages": 0,
+                "total_pages": 0, "status_2xx": 0, "status_3xx": 0,
+                "status_4xx": 0, "status_5xx": 0, "redirect_chains": 0,
+                "missing_titles": 0, "long_titles": 0, "no_meta_desc": 0,
+                "no_h1": 0, "multi_h1": 0, "noindex_pages": 0,
             }
             self.results["broken_internal_links"] = []
             self.results["duplicate_titles"] = {}
@@ -215,16 +267,11 @@ class FullTechnicalAudit:
 
         df = pd.DataFrame(self.pages_data)
 
-        # Basic status breakdown
         self.results["crawl_summary"] = {
             "total_pages": int(len(df)),
             "status_2xx": int(len(df[df["status_code"] < 300])),
-            "status_3xx": int(
-                len(df[(df["status_code"] >= 300) & (df["status_code"] < 400)])
-            ),
-            "status_4xx": int(
-                len(df[(df["status_code"] >= 400) & (df["status_code"] < 500)])
-            ),
+            "status_3xx": int(len(df[(df["status_code"] >= 300) & (df["status_code"] < 400)])),
+            "status_4xx": int(len(df[(df["status_code"] >= 400) & (df["status_code"] < 500)])),
             "status_5xx": int(len(df[df["status_code"] >= 500])),
             "redirect_chains": int(df["redirect_chain"].sum()),
             "missing_titles": int(len(df[df["title"] == ""])),
@@ -235,44 +282,32 @@ class FullTechnicalAudit:
             "noindex_pages": int(len(df[df["noindex"]])),
         }
 
-        # Duplicate titles
         title_counts = Counter(df["title"].tolist())
-        duplicate_titles = {t: c for t, c in title_counts.items() if t and c > 1}
-        self.results["duplicate_titles"] = dict(list(duplicate_titles.items())[:10])
+        self.results["duplicate_titles"] = {
+            t: c for t, c in title_counts.items() if t and c > 1
+        }
 
-        # Broken internal links: any URL we crawled that is 4xx/5xx
         broken = df[df["status_code"] >= 400][["url", "status_code"]]
         self.results["broken_internal_links"] = broken.to_dict(orient="records")
 
-    # ------------------- PAGESPEED INSIGHTS (SAMPLE) -------------------
+    # ------------------- PAGESPEED -------------------
 
     def fetch_pagespeed(self, url: str) -> Optional[Dict[str, Any]]:
         if not self.pagespeed_key:
             return None
-
         api = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
-        params = {
-            "url": url,
-            "strategy": "mobile",
-            "key": self.pagespeed_key,
-        }
+        params = {"url": url, "strategy": "mobile", "key": self.pagespeed_key}
         try:
             r = requests.get(api, params=params, timeout=60)
             if r.status_code != 200:
                 return {"url": url, "error": f"status {r.status_code}"}
             data = r.json()
-
-            # Prefer field data (CrUX)
             loading = data.get("loadingExperience", {}).get("metrics", {})
             lcp = loading.get("LARGEST_CONTENTFUL_PAINT_MS", {}).get("percentile")
             inp = loading.get("INTERACTION_TO_NEXT_PAINT_MS", {}).get("percentile")
             cls_raw = loading.get("CUMULATIVE_LAYOUT_SHIFT_SCORE", {}).get("percentile")
             cls = cls_raw / 100 if cls_raw is not None else None
-            category = loading.get("EXPERIMENTAL_CWV_OVERALL", {}).get(
-                "category", "Unknown"
-            )
-
-            # Fallback to Lighthouse lab metrics if needed
+            category = loading.get("EXPERIMENTAL_CWV_OVERALL", {}).get("category", "Unknown")
             audits = data.get("lighthouseResult", {}).get("audits", {})
             if lcp is None:
                 lcp = audits.get("largest-contentful-paint", {}).get("numericValue")
@@ -280,65 +315,42 @@ class FullTechnicalAudit:
                 inp = audits.get("interaction-to-next-paint", {}).get("numericValue")
             if cls is None:
                 cls = audits.get("cumulative-layout-shift", {}).get("numericValue")
-
-            return {
-                "url": url,
-                "lcp_ms": lcp,
-                "inp_ms": inp,
-                "cls": cls,
-                "cwv_category": category,
-            }
+            return {"url": url, "lcp_ms": lcp, "inp_ms": inp, "cls": cls, "cwv_category": category}
         except Exception as e:
             return {"url": url, "error": str(e)}
 
     def run_pagespeed_sample(self):
-        """Sample: homepage + first 2 other URLs"""
         if not self.pagespeed_key or not self.pages_data:
             self.results["pagespeed_sample"] = []
             return
-
         urls: List[str] = [self.site_url]
         for page in self.pages_data:
             if page["url"] != self.site_url and len(urls) < 3:
                 urls.append(page["url"])
-
-        cwv_results: List[Dict[str, Any]] = []
-        for u in urls:
-            res = self.fetch_pagespeed(u)
-            if res:
-                cwv_results.append(res)
-
-        self.results["pagespeed_sample"] = cwv_results
+        self.results["pagespeed_sample"] = [
+            res for u in urls if (res := self.fetch_pagespeed(u))
+        ]
 
     # ------------------- ENTRYPOINT -------------------
 
     def run_full_audit(self):
         self.audit_robots_txt()
-
-        # If robots disallows homepage, do not crawl; mark status
         allows = self.results["robots_txt"].get("allows_homepage", True)
         if not allows:
-            self.results["crawl_summary"] = {
-                "total_pages": 0,
-                "status_2xx": 0,
-                "status_3xx": 0,
-                "status_4xx": 0,
-                "status_5xx": 0,
-                "redirect_chains": 0,
-                "missing_titles": 0,
-                "long_titles": 0,
-                "no_meta_desc": 0,
-                "no_h1": 0,
-                "multi_h1": 0,
-                "noindex_pages": 0,
-            }
-            self.results["broken_internal_links"] = []
-            self.results["duplicate_titles"] = {}
-            self.results["pagespeed_sample"] = []
-            self.results["audit_status"] = "CRAWL_BLOCKED_BY_ROBOTS"
+            self.results.update({
+                "crawl_summary": {
+                    "total_pages": 0, "status_2xx": 0, "status_3xx": 0,
+                    "status_4xx": 0, "status_5xx": 0, "redirect_chains": 0,
+                    "missing_titles": 0, "long_titles": 0, "no_meta_desc": 0,
+                    "no_h1": 0, "multi_h1": 0, "noindex_pages": 0,
+                },
+                "broken_internal_links": [],
+                "duplicate_titles": {},
+                "pagespeed_sample": [],
+                "audit_status": "CRAWL_BLOCKED_BY_ROBOTS",
+            })
             return self.results
 
-        # Normal path
         self.run_crawl()
         self.analyze_crawl()
         if self.pagespeed_key:
@@ -347,10 +359,8 @@ class FullTechnicalAudit:
             self.results["pagespeed_sample"] = []
         self.results["audit_status"] = "OK"
         return self.results
-    
 
     def generate_summary(self) -> str:
-        """Generate a human-readable text summary of the audit."""
         summary = self.results.get("crawl_summary", {})
         robots_info = self.results.get("robots_txt", {})
         pagespeed = self.results.get("pagespeed_sample", [])
@@ -363,19 +373,15 @@ class FullTechnicalAudit:
         lines.append(f"Status: {audit_status}")
         lines.append("=" * 60)
         lines.append("")
-
-        # Robots & Crawlability
         lines.append("ROBOTS & CRAWLABILITY")
         lines.append("-" * 60)
         lines.append(f"Robots.txt exists: {robots_info.get('exists', 'Unknown')}")
         lines.append(f"Homepage allowed: {robots_info.get('allows_homepage', 'Unknown')}")
         if audit_status == "CRAWL_BLOCKED_BY_ROBOTS":
             lines.append("")
-            lines.append("Crawl blocked by robots.txt - cannot audit further.")
+            lines.append("Issue: Crawl is blocked by robots.txt.")
             return "\n".join(lines)
         lines.append("")
-
-        # Crawl Summary
         lines.append("CRAWL SUMMARY")
         lines.append("-" * 60)
         lines.append(f"Pages crawled: {summary.get('total_pages', 0)}")
@@ -384,9 +390,11 @@ class FullTechnicalAudit:
         lines.append(f"Status 4xx (Client Error): {summary.get('status_4xx', 0)}")
         lines.append(f"Status 5xx (Server Error): {summary.get('status_5xx', 0)}")
         lines.append(f"Redirect chains found: {summary.get('redirect_chains', 0)}")
+        if summary.get("redirect_chains", 0) > 0:
+            lines.append("Issue: Redirect chains detected.")
+        if summary.get("status_4xx", 0) > 0 or summary.get("status_5xx", 0) > 0:
+            lines.append("Issue: Some URLs return 4xx/5xx status codes.")
         lines.append("")
-
-        # On-Page SEO Issues
         lines.append("ON-PAGE SEO ISSUES")
         lines.append("-" * 60)
         lines.append(f"Pages missing title: {summary.get('missing_titles', 0)}")
@@ -396,96 +404,58 @@ class FullTechnicalAudit:
         lines.append(f"Pages with multiple H1s: {summary.get('multi_h1', 0)}")
         lines.append(f"Pages with noindex tag: {summary.get('noindex_pages', 0)}")
         lines.append("")
-
-        # Duplicate Titles
+        if summary.get("no_meta_desc", 0) > 0:
+            lines.append("Issue: Many pages are missing meta descriptions.")
+        if summary.get("no_h1", 0) > 0:
+            lines.append("Issue: Some pages have no H1 heading.")
+        if summary.get("multi_h1", 0) > 0:
+            lines.append("Issue: Some pages contain multiple H1 headings.")
+        if summary.get("long_titles", 0) > 0:
+            lines.append("Issue: Some titles are longer than 60 characters.")
+        if summary.get("missing_titles", 0) > 0:
+            lines.append("Issue: Some pages are missing titles.")
+        lines.append("")
         duplicates = self.results.get("duplicate_titles", {})
         if duplicates:
             lines.append("DUPLICATE TITLES (Top 10)")
             lines.append("-" * 60)
             for title, count in list(duplicates.items())[:10]:
                 lines.append(f"[{count}x] {title[:80]}")
+            lines.append("Issue: Duplicate page titles detected.")
             lines.append("")
-
-        # Broken Links
         broken = self.results.get("broken_internal_links", [])
         if broken:
-            lines.append("BROKEN INTERNAL LINKS (4xx/5xx)")
+            lines.append("BROKEN INTERNAL LINKS")
             lines.append("-" * 60)
             for item in broken[:10]:
                 lines.append(f"{item.get('status_code', '?')} - {item.get('url', '')[:100]}")
+            lines.append("Issue: Internal links pointing to error pages.")
             lines.append("")
-
-        # Core Web Vitals
         if pagespeed:
-            lines.append("CORE WEB VITALS (Lab Metrics - Mobile)")
+            lines.append("CORE WEB VITALS (Mobile)")
             lines.append("-" * 60)
+            any_lcp_issue = False
+            any_cls_issue = False
             for item in pagespeed:
-                url = item.get("url", "Unknown")[:80]
+                u = item.get("url", "Unknown")[:80]
                 if "error" in item:
-                    lines.append(f"{url}: ERROR - {item['error']}")
+                    lines.append(f"{u}: ERROR")
                 else:
                     lcp = item.get("lcp_ms")
                     inp = item.get("inp_ms")
                     cls = item.get("cls")
-                    if lcp is not None:
-                        if lcp < 2500:
-                            lcp_status = "Good"
-                        elif lcp < 4000:
-                            lcp_status = "Needs work"
-                        else:
-                            lcp_status = "Poor"
-                    else:
-                        lcp_status = "N/A"
-                    if cls is not None:
-                        if cls < 0.1:
-                            cls_status = "Good"
-                        elif cls < 0.25:
-                            cls_status = "Needs work"
-                        else:
-                            cls_status = "Poor"
-                    else:
-                        cls_status = "N/A"
-
-                    lines.append(f"URL: {url}")
-                    lines.append(f"  LCP: {lcp:.0f} ms ({lcp_status})" if lcp is not None else "  LCP: N/A")
+                    lines.append(f"URL: {u}")
+                    lines.append(f"  LCP: {lcp:.0f} ms" if lcp is not None else "  LCP: N/A")
                     lines.append(f"  INP: {inp:.0f} ms" if inp is not None else "  INP: N/A")
-                    lines.append(f"  CLS: {cls:.3f} ({cls_status})" if cls is not None else "  CLS: N/A")
-            lines.append("")
-
-        # Recommendations
-        lines.append("RECOMMENDATIONS")
-        lines.append("-" * 60)
-        issues = []
-        if summary.get("no_meta_desc", 0) > 5:
-            issues.append("• Add missing meta descriptions to important pages.")
-        if summary.get("no_h1", 0) > 0:
-            issues.append("• Add H1 tags to pages without them.")
-        if summary.get("multi_h1", 0) > 0:
-            issues.append("• Reduce multiple H1s to a single main H1 per page.")
-        if summary.get("long_titles", 0) > 5:
-            issues.append("• Shorten long titles (>60 chars) to avoid truncation.")
-        if duplicates:
-            issues.append("• Make duplicate titles unique for each page.")
-        if broken:
-            issues.append("• Fix broken internal links returning 4xx/5xx.")
-        if pagespeed:
-            for item in pagespeed:
-                if "error" not in item:
-                    lcp = item.get("lcp_ms")
-                    cls = item.get("cls")
+                    lines.append(f"  CLS: {cls:.3f}" if cls is not None else "  CLS: N/A")
                     if lcp is not None and lcp > 4000:
-                        issues.append("• Improve LCP by optimizing images and reducing JavaScript.")
+                        any_lcp_issue = True
                     if cls is not None and cls > 0.25:
-                        issues.append("• Reduce CLS by reserving space for images and avoiding layout shifts.")
-
-        if issues:
-            for issue in issues:
-                lines.append(issue)
-        else:
-            lines.append("No major issues detected.")
-
-        lines.append("")
+                        any_cls_issue = True
+            if any_lcp_issue:
+                lines.append("Issue: Poor LCP detected (slow page load).")
+            if any_cls_issue:
+                lines.append("Issue: High CLS detected (layout shifts).")
+            lines.append("")
         lines.append("=" * 60)
-
         return "\n".join(lines)
-
