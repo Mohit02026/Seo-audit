@@ -339,117 +339,169 @@ class FullTechnicalAudit:
             self.results["pagespeed_sample"] = []
         self.results["audit_status"] = "OK"
         return self.results
-
+    
+    
     def generate_summary(self) -> str:
-        """Generate a human-readable text summary of the audit (issues only)."""
+        """Generate a client‑friendly text summary of the audit (issues only)."""
         summary = self.results.get("crawl_summary", {})
         robots_info = self.results.get("robots_txt", {})
         pagespeed = self.results.get("pagespeed_sample", [])
         audit_status = self.results.get("audit_status", "UNKNOWN")
 
-        lines = []
+        total_pages = summary.get("total_pages", 0)
+        issues_present = []
+
+        if summary.get("no_meta_desc", 0) > 0:
+            issues_present.append("missing meta descriptions")
+        if summary.get("missing_titles", 0) > 0:
+            issues_present.append("missing page titles")
+        if summary.get("no_h1", 0) > 0:
+            issues_present.append("missing H1 headings")
+        if summary.get("multi_h1", 0) > 0:
+            issues_present.append("multiple H1s")
+        if summary.get("status_4xx", 0) > 0 or summary.get("status_5xx", 0) > 0:
+            issues_present.append("error pages (4xx/5xx)")
+        if summary.get("redirect_chains", 0) > 0:
+            issues_present.append("redirect chains")
+
+        cwv_issues = []
+        if pagespeed:
+            for item in pagespeed:
+                if "error" in item:
+                    continue
+                lcp = item.get("lcp_ms")
+                cls = item.get("cls")
+                if lcp is not None and lcp > 4000:
+                    cwv_issues.append("slow loading (LCP)")
+                if cls is not None and cls > 0.25:
+                    cwv_issues.append("layout shifts (CLS)")
+        cwv_issues = list(set(cwv_issues))
+
+        # ---------------- Executive summary ----------------
+        lines: list[str] = []
         lines.append("=" * 60)
-        lines.append("SEO TECHNICAL AUDIT REPORT")
-        lines.append(f"URL: {self.site_url}")
-        lines.append(f"Status: {audit_status}")
+        lines.append("SEO TECHNICAL AUDIT SUMMARY")
+        lines.append(f"Website: {self.site_url}")
+        lines.append(f"Overall status: {audit_status}")
         lines.append("=" * 60)
         lines.append("")
 
-        # Robots & Crawlability
-        lines.append("ROBOTS & CRAWLABILITY")
+        # Short, human summary paragraph
+        lines.append("Executive overview")
         lines.append("-" * 60)
-        lines.append(f"Robots.txt exists: {robots_info.get('exists', 'Unknown')}")
-        lines.append(f"Homepage allowed: {robots_info.get('allows_homepage', 'Unknown')}")
         if audit_status == "CRAWL_BLOCKED_BY_ROBOTS":
+            lines.append(
+                "We were not able to fully crawl the site because the homepage is "
+                "blocked in robots.txt, so the audit is limited to high‑level checks."
+            )
+        else:
+            if total_pages == 0:
+                lines.append(
+                    "We were not able to crawl any internal pages. The site may be "
+                    "using heavy JavaScript or blocking automated crawlers."
+                )
+            else:
+                if issues_present or cwv_issues:
+                    main_issues = ", ".join(issues_present + cwv_issues)
+                    lines.append(
+                        f"We crawled approximately {total_pages} pages and found technical "
+                        f"issues related to {main_issues}."
+                    )
+                else:
+                    lines.append(
+                        f"We crawled approximately {total_pages} pages and did not detect "
+                        "any major technical SEO issues."
+                    )
+        lines.append("")
+
+        # ---------------- Robots & crawlability ----------------
+        lines.append("1. Robots.txt & crawlability")
+        lines.append("-" * 60)
+        lines.append(f"- Robots.txt present: {robots_info.get('exists', 'Unknown')}")
+        lines.append(f"- Homepage crawl allowed: {robots_info.get('allows_homepage', 'Unknown')}")
+        if audit_status == "CRAWL_BLOCKED_BY_ROBOTS":
+            lines.append("Issue: Homepage is blocked from crawling in robots.txt.")
             lines.append("")
-            lines.append("Issue: Crawl is blocked by robots.txt, further audit is limited.")
+            lines.append("=" * 60)
             return "\n".join(lines)
         lines.append("")
 
-        # Crawl Summary
-        lines.append("CRAWL SUMMARY")
+        # ---------------- Site-level metrics ----------------
+        lines.append("2. Site‑level crawl metrics")
         lines.append("-" * 60)
-        lines.append(f"Pages crawled: {summary.get('total_pages', 0)}")
-        lines.append(f"Status 2xx (OK): {summary.get('status_2xx', 0)}")
-        lines.append(f"Status 3xx (Redirect): {summary.get('status_3xx', 0)}")
-        lines.append(f"Status 4xx (Client Error): {summary.get('status_4xx', 0)}")
-        lines.append(f"Status 5xx (Server Error): {summary.get('status_5xx', 0)}")
-        lines.append(f"Redirect chains found: {summary.get('redirect_chains', 0)}")
+        lines.append(f"- Pages crawled: {total_pages}")
+        lines.append(f"- 2xx (OK): {summary.get('status_2xx', 0)}")
+        lines.append(f"- 3xx (redirects): {summary.get('status_3xx', 0)}")
+        lines.append(f"- 4xx (client errors): {summary.get('status_4xx', 0)}")
+        lines.append(f"- 5xx (server errors): {summary.get('status_5xx', 0)}")
+        lines.append(f"- Redirect chains detected: {summary.get('redirect_chains', 0)}")
         if summary.get("redirect_chains", 0) > 0:
-            lines.append("Issue: Redirect chains detected.")
+            lines.append("Issue: Some URLs redirect through multiple hops before loading.")
         if summary.get("status_4xx", 0) > 0 or summary.get("status_5xx", 0) > 0:
-            lines.append("Issue: Some URLs return 4xx/5xx status codes.")
+            lines.append("Issue: Some pages return error codes (4xx/5xx).")
         lines.append("")
 
-        # On-Page SEO Issues
-        lines.append("ON-PAGE SEO ISSUES")
+        # ---------------- On-page SEO ----------------
+        lines.append("3. On‑page SEO (titles, meta, headings)")
         lines.append("-" * 60)
-        lines.append(f"Pages missing title: {summary.get('missing_titles', 0)}")
-        lines.append(f"Pages with long title (>60 chars): {summary.get('long_titles', 0)}")
-        lines.append(f"Pages missing meta description: {summary.get('no_meta_desc', 0)}")
-        lines.append(f"Pages with no H1: {summary.get('no_h1', 0)}")
-        lines.append(f"Pages with multiple H1s: {summary.get('multi_h1', 0)}")
-        lines.append(f"Pages with noindex tag: {summary.get('noindex_pages', 0)}")
-        lines.append("")
+        lines.append(f"- Pages missing title: {summary.get('missing_titles', 0)}")
+        lines.append(f"- Pages with long title (>60 chars): {summary.get('long_titles', 0)}")
+        lines.append(f"- Pages missing meta description: {summary.get('no_meta_desc', 0)}")
+        lines.append(f"- Pages with no H1: {summary.get('no_h1', 0)}")
+        lines.append(f"- Pages with multiple H1s: {summary.get('multi_h1', 0)}")
+        lines.append(f"- Pages with noindex: {summary.get('noindex_pages', 0)}")
+        if summary.get("missing_titles", 0) > 0:
+            lines.append("Issue: Some pages are missing a title tag.")
         if summary.get("no_meta_desc", 0) > 0:
-            lines.append("Issue: Some pages are missing meta descriptions.")
+            lines.append("Issue: Some pages are missing a meta description.")
         if summary.get("no_h1", 0) > 0:
-            lines.append("Issue: Some pages have no H1 heading.")
+            lines.append("Issue: Some pages do not have an H1 heading.")
         if summary.get("multi_h1", 0) > 0:
-            lines.append("Issue: Some pages contain multiple H1 headings.")
+            lines.append("Issue: Some pages contain more than one H1 heading.")
         if summary.get("long_titles", 0) > 0:
             lines.append("Issue: Some titles are longer than 60 characters.")
-        if summary.get("missing_titles", 0) > 0:
-            lines.append("Issue: Some pages are missing titles.")
         lines.append("")
 
-        # Duplicate Titles
+        # ---------------- Duplicate titles ----------------
         duplicates = self.results.get("duplicate_titles", {})
         if duplicates:
-            lines.append("DUPLICATE TITLES (Top 10)")
+            lines.append("4. Duplicate titles (sample)")
             lines.append("-" * 60)
             for title, count in list(duplicates.items())[:10]:
-                lines.append(f"[{count}x] {title[:80]}")
-            lines.append("Issue: Duplicate page titles detected across multiple URLs.")
+                lines.append(f"- [{count}×] {title[:80]}")
+            lines.append("Issue: Different URLs share the same page title.")
             lines.append("")
 
-        # Broken Links
+        # ---------------- Broken links ----------------
         broken = self.results.get("broken_internal_links", [])
         if broken:
-            lines.append("BROKEN INTERNAL LINKS")
+            lines.append("5. Internal error pages (sample)")
             lines.append("-" * 60)
             for item in broken[:10]:
-                lines.append(f"{item.get('status_code', '?')} - {item.get('url', '')[:100]}")
-            lines.append("Issue: Internal links pointing to error pages.")
+                lines.append(f"- {item.get('status_code', '?')} → {item.get('url', '')[:100]}")
+            lines.append("Issue: Some internal links lead to error pages.")
             lines.append("")
 
-        # Core Web Vitals
+        # ---------------- Core Web Vitals ----------------
         if pagespeed:
-            lines.append("CORE WEB VITALS (Mobile)")
+            lines.append("6. Core Web Vitals (mobile sample)")
             lines.append("-" * 60)
-            any_lcp_issue = False
-            any_cls_issue = False
             for item in pagespeed:
                 u = item.get("url", "Unknown")[:80]
                 if "error" in item:
-                    lines.append(f"{u}: ERROR")
+                    lines.append(f"- {u}: PageSpeed error ({item['error']})")
                 else:
                     lcp = item.get("lcp_ms")
                     inp = item.get("inp_ms")
                     cls = item.get("cls")
-                    lines.append(f"URL: {u}")
-                    lines.append(f"  LCP: {lcp:.0f} ms" if lcp is not None else "  LCP: N/A")
-                    lines.append(f"  INP: {inp:.0f} ms" if inp is not None else "  INP: N/A")
-                    lines.append(f"  CLS: {cls:.3f}" if cls is not None else "  CLS: N/A")
-                    if lcp is not None and lcp > 4000:
-                        any_lcp_issue = True
-                    if cls is not None and cls > 0.25:
-                        any_cls_issue = True
-            if any_lcp_issue:
-                lines.append("Issue: Poor LCP detected (slow perceived loading).")
-            if any_cls_issue:
-                lines.append("Issue: High CLS detected (layout shifts).")
+                    lines.append(f"- URL: {u}")
+                    lines.append(f"  • LCP: {lcp:.0f} ms" if lcp is not None else "  • LCP: N/A")
+                    lines.append(f"  • INP: {inp:.0f} ms" if inp is not None else "  • INP: N/A")
+                    lines.append(f"  • CLS: {cls:.3f}" if cls is not None else "  • CLS: N/A")
+            if cwv_issues:
+                lines.append("Issue: Core Web Vitals indicate " + ", ".join(cwv_issues) + ".")
             lines.append("")
 
         lines.append("=" * 60)
         return "\n".join(lines)
+
