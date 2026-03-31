@@ -335,3 +335,48 @@ def audit_redirect_setup(self):
                 checks.get('http_to_https', {}).get('status'))
     print(f"🔀 Redirect checks done: www={checks.get('www_redirect',{}).get('status')}  "
           f"http→https={checks.get('http_to_https',{}).get('status')}")
+
+
+# ---------------------------------------------------------------------------
+# Internal PageRank
+# ---------------------------------------------------------------------------
+
+def compute_pagerank(self):
+    """Iterative PageRank on the internal link graph. Adds pagerank_score to each page."""
+    graph = getattr(self, "_link_graph", {})
+    pages = [p["url"] for p in self.pages_data]
+    if not pages or not graph:
+        for p in self.pages_data:
+            p["pagerank_score"] = 0.0
+        self.results["top_pagerank_pages"] = []
+        return
+
+    damping = 0.85
+    n = len(pages)
+    scores = {url: 1.0 / n for url in pages}
+    page_set = set(pages)
+
+    for _ in range(50):
+        new_scores = {url: (1 - damping) / n for url in pages}
+        for src, dests in graph.items():
+            if src not in page_set:
+                continue
+            internal_dests = [d for d in dests if d in page_set]
+            if not internal_dests:
+                continue
+            share = scores[src] / len(internal_dests)
+            for dest in internal_dests:
+                new_scores[dest] = new_scores.get(dest, 0) + damping * share
+        scores = new_scores
+
+    max_score = max(scores.values()) or 1.0
+    for p in self.pages_data:
+        raw = scores.get(p["url"], 0.0)
+        p["pagerank_score"] = round(raw / max_score, 4)
+
+    top = sorted(self.pages_data, key=lambda p: p["pagerank_score"], reverse=True)[:20]
+    self.results["top_pagerank_pages"] = [
+        {"url": p["url"], "pagerank_score": p["pagerank_score"], "title": p.get("title", "")}
+        for p in top
+    ]
+    logger.info("PageRank computed pages=%d", len(pages))

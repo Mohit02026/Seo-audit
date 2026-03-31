@@ -291,6 +291,7 @@ async def _crawl_page(self, client: httpx.AsyncClient, url: str) -> Optional[Dic
 
     with self._lock:
         self.pages_data.append(page_data)
+        self._link_graph[url] = internal_links
         current_depth = self._url_depths.get(url, 0)
         for link in internal_links:
             self._link_targets.add(link)

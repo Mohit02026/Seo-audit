@@ -73,6 +73,9 @@ class FullTechnicalAudit:
         self._url_depths: Dict[str, int] = {self.site_url: 0}
         self._link_targets: set = set()
 
+        # Link graph for PageRank (source URL → list of internal destination URLs)
+        self._link_graph: Dict[str, List[str]] = {}
+
         # External link health
         self._external_links_seen: set = set()
 
@@ -100,6 +103,7 @@ class FullTechnicalAudit:
     _check_external_links_async = _analyzers._check_external_links_async
     audit_broken_external_links = _analyzers.audit_broken_external_links
     audit_redirect_setup        = _analyzers.audit_redirect_setup
+    compute_pagerank            = _analyzers.compute_pagerank
 
     # ------------------------------------------------------------------
     # Bound methods from pagespeed.py
@@ -143,6 +147,7 @@ class FullTechnicalAudit:
         self.analyze_crawl()
         self.audit_redirect_setup()
         self.audit_broken_external_links()
+        self.compute_pagerank()
         if self.pagespeed_key:
             self.run_pagespeed_sample()
         else:

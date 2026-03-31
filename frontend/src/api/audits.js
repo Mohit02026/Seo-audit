@@ -1,0 +1,17 @@
+import api from './client'
+
+export const getJobs = (limit = 50) => api.get('/api/jobs', { params: { limit } }).then(r => r.data)
+export const getJob = id => api.get(`/api/status/${id}`).then(r => r.data)
+export const startAudit = body => api.post('/api/audit', body).then(r => r.data)
+export const getDiff = (a, b) => api.get(`/api/diff/${a}/${b}`).then(r => r.data)
+export const getGscData = id => api.get(`/api/gsc/data/${id}`).then(r => r.data)
+export const getGscStatus = () => api.get('/api/gsc/status').then(r => r.data)
+export const revokeGsc = domain => api.delete(`/api/gsc/${domain}`).then(r => r.data)
+export const saveGscDomain = domain => api.post(`/api/gsc/save/${domain}`).then(r => r.data)
+export const getSchedules = () => api.get('/api/schedules').then(r => r.data)
+export const createSchedule = body => api.post('/api/schedules', body).then(r => r.data)
+export const updateSchedule = (id, body) => api.patch(`/api/schedules/${id}`, body).then(r => r.data)
+export const deleteSchedule = id => api.delete(`/api/schedules/${id}`).then(r => r.data)
+export const getUsers = () => api.get('/auth/users').then(r => r.data)
+export const createUser = body => api.post('/auth/users', body).then(r => r.data)
+export const purgeJobs = days => api.delete('/api/jobs/purge', { params: { days } }).then(r => r.data)
