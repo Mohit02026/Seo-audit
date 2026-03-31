@@ -1,6 +1,8 @@
 fastapi==0.104.1
-uvicorn[standard]==0.24.0
-requests==2.31.0
+uvicorn==0.24.0
+httpx[http2]==0.27.0
 beautifulsoup4==4.12.2
-lxml==4.9.3
-pandas==2.1.4
+lxml>=5.2.0
+pandas>=2.2.3
+playwright==1.58.0
+python-dotenv>=1.0.0
