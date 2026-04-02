@@ -14,7 +14,7 @@ from typing import Optional, List
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Depends
-from fastapi.responses import StreamingResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import StreamingResponse, PlainTextResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
@@ -63,9 +63,8 @@ async def shutdown():
 
 
 # Serve React frontend (built to static/)
+# StaticFiles html=True does NOT act as SPA fallback — use explicit catch-all instead.
 _static = Path(__file__).parent / "static"
-if _static.exists():
-    app.mount("/app", StaticFiles(directory=str(_static), html=True), name="frontend")
 
 
 # ─────────────────────────────────────────────
@@ -251,6 +250,7 @@ def get_status(job_id: str, user: dict = Depends(get_current_user)):
         "updated_at": job["updated_at"],
         "js_enrichment_used": bool(job["js_enrichment_used"]),
         "error": job["error"], "result": job["result_json"], "summary": job["summary"],
+        "pages_data": job["pages_data_json"],
     }
 
 
@@ -371,6 +371,12 @@ def gsc_auth(user: dict = Depends(require_admin)):
     return RedirectResponse(_gsc.get_auth_url())
 
 
+@app.get("/api/gsc/auth-url")
+def gsc_auth_url(user: dict = Depends(require_admin)):
+    """Return the Google OAuth URL as JSON so the frontend can redirect programmatically."""
+    return {"url": _gsc.get_auth_url()}
+
+
 @app.get("/api/gsc/callback")
 def gsc_callback(code: str, state: Optional[str] = None):
     creds = _gsc.exchange_code(code)
@@ -478,3 +484,30 @@ def debug_pages(url: str):
     audit = FullTechnicalAudit(url, max_pages=50, pagespeed_key=PAGESPEED_API_KEY, threads=8)
     audit.run_full_audit()
     return {"pages_data": audit.pages_data}
+
+
+# ─────────────────────────────────────────────
+# SPA catch-all — must be LAST
+# Serves index.html for all /app/* routes so React Router handles navigation.
+# Serves actual static files (JS, CSS, icons) directly from static/.
+# ─────────────────────────────────────────────
+
+@app.get("/app", include_in_schema=False)
+async def serve_react_root():
+    index = _static / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return PlainTextResponse("Frontend not built. Run: cd frontend && npm run build", status_code=503)
+
+
+@app.get("/app/{full_path:path}", include_in_schema=False)
+async def serve_react(full_path: str):
+    # Serve actual files (JS, CSS, SVG, etc.) if they exist
+    file = _static / full_path
+    if full_path and file.exists() and file.is_file():
+        return FileResponse(str(file))
+    # SPA fallback — let React Router handle the path
+    index = _static / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return PlainTextResponse("Frontend not built. Run: cd frontend && npm run build", status_code=503)

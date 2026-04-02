@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getGscStatus, revokeGsc, saveGscDomain } from '../api/audits'
+import api from '../api/client'
 import { Card, Button, Input, PageHeader, EmptyState, Table } from '../components/ui'
 import { Link2, Link2Off, CheckCircle2, Settings } from 'lucide-react'
 
@@ -29,9 +30,9 @@ export default function GscSettings() {
       <Card className="p-6 sm:p-8 mb-8 reveal-up">
         <h3 className="text-2xl font-semibold text-white mb-1">Connect a property</h3>
         <p className="text-base text-[#9eb3d2] mb-5">You will be redirected to Google to authorize access. Ensure the Google account has access to the GSC property.</p>
-        <a href="/api/gsc/auth">
-          <Button><Link2 size={16} /> Connect with Google</Button>
-        </a>
+        <Button onClick={() => api.get('/api/gsc/auth-url').then(r => { window.location.href = r.data.url })}>
+          <Link2 size={16} /> Connect with Google
+        </Button>
       </Card>
 
       {hasPending && (
