@@ -15,6 +15,10 @@ from db import db_save_gsc_token, db_get_gsc_token, db_delete_gsc_token, db_list
 
 logger = logging.getLogger(__name__)
 
+# Holds in-flight OAuth flows keyed by state so the code_verifier
+# generated during authorization_url() is available at callback time.
+_pending_flows: dict = {}
+
 SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
 CLIENT_CONFIG = {
     "web": {
@@ -30,13 +34,18 @@ REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/gsc/c
 
 def get_auth_url() -> str:
     flow = Flow.from_client_config(CLIENT_CONFIG, scopes=SCOPES, redirect_uri=REDIRECT_URI)
-    auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent")
+    auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
+    _pending_flows[state] = flow
     return auth_url
 
 
-def exchange_code(code: str) -> Optional[Credentials]:
+def exchange_code(code: str, state: Optional[str] = None) -> Optional[Credentials]:
     try:
-        flow = Flow.from_client_config(CLIENT_CONFIG, scopes=SCOPES, redirect_uri=REDIRECT_URI)
+        # Reuse the original flow so the PKCE code_verifier is preserved
+        if state and state in _pending_flows:
+            flow = _pending_flows.pop(state)
+        else:
+            flow = Flow.from_client_config(CLIENT_CONFIG, scopes=SCOPES, redirect_uri=REDIRECT_URI)
         flow.fetch_token(code=code)
         return flow.credentials
     except Exception:

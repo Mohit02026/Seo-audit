@@ -379,7 +379,7 @@ def gsc_auth_url(user: dict = Depends(require_admin)):
 
 @app.get("/api/gsc/callback")
 def gsc_callback(code: str, state: Optional[str] = None):
-    creds = _gsc.exchange_code(code)
+    creds = _gsc.exchange_code(code, state)
     if not creds:
         raise HTTPException(status_code=400, detail="OAuth exchange failed")
     # Store under the domain from token_uri (we'll ask user to specify domain in UI)
