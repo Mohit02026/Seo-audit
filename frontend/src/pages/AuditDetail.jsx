@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getJob, getGscData } from '../api/audits'
@@ -43,6 +43,53 @@ function IssueRow({ label, value, threshold = 0, invert = false }) {
     <div className="flex items-center justify-between py-3.5 border-b border-[var(--border-soft)] last:border-0">
       <span className="text-base text-[#b2c5e1]">{label}</span>
       <span className={clsx('text-base font-medium', isIssue ? 'text-rose-300' : 'text-[#d6e2f5]')}>{value ?? 0}</span>
+    </div>
+  )
+}
+
+function formatElapsed(seconds) {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function RunningBanner({ status, url, createdAt }) {
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    const start = createdAt ? new Date(createdAt).getTime() : Date.now()
+    setElapsed(Math.floor((Date.now() - start) / 1000))
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [createdAt])
+
+  const isQueued = status === 'queued'
+
+  return (
+    <div className="mb-6 reveal-up">
+      <div className="surface-blur panel-surface rounded-2xl p-5 sm:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-2 rounded-full bg-[#4f9cfb] pulse-glow" />
+            <span className="text-base font-medium text-[#d6e8ff]">
+              {isQueued ? 'Queued…' : `Crawling ${url}`}
+            </span>
+          </div>
+          <span className="font-mono text-base text-[#7f9ec5] tabular-nums">{formatElapsed(elapsed)}</span>
+        </div>
+        <div className="relative h-2 rounded-full bg-[#1a2e47] overflow-hidden">
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#3a7fd4] to-[#4f9cfb] progress-fill"
+            style={{ animationPlayState: isQueued ? 'paused' : 'running' }}
+          />
+          <div className="absolute inset-y-0 left-0 w-1/3 progress-shimmer" />
+        </div>
+        <p className="text-sm text-[#6a87ab] mt-3">
+          {isQueued ? 'Waiting for a worker to pick up this job…' : 'Analysis will appear automatically when the crawl finishes.'}
+        </p>
+      </div>
     </div>
   )
 }
@@ -106,6 +153,10 @@ export default function AuditDetail() {
           <p className="text-base text-[#c2d6ef] mt-1.5">{job?.lead_name} - {job?.created_at?.slice(0, 10)}</p>
         </div>
       </div>
+
+      {(job?.status === 'running' || job?.status === 'queued') && (
+        <RunningBanner status={job.status} url={job.url} createdAt={job.created_at} />
+      )}
 
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
