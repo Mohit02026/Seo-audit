@@ -2,7 +2,13 @@ import clsx from 'clsx'
 
 export function Card({ children, className }) {
   return (
-    <div className={clsx('bg-[#1E293B] border border-[#334155] rounded-xl', className)}>
+    <div
+      className={clsx(
+        'surface-blur panel-surface rounded-2xl sm:rounded-[1.35rem]',
+        'transition-all duration-300 hover:border-[var(--border-soft-2)]',
+        className
+      )}
+    >
       {children}
     </div>
   )
@@ -10,16 +16,22 @@ export function Card({ children, className }) {
 
 export function Badge({ variant = 'default', children }) {
   const styles = {
-    default: 'bg-slate-700 text-slate-300',
-    success: 'bg-green-500/15 text-green-400 border border-green-500/20',
-    warning: 'bg-amber-500/15 text-amber-400 border border-amber-500/20',
-    danger: 'bg-red-500/15 text-red-400 border border-red-500/20',
-    info: 'bg-blue-500/15 text-blue-400 border border-blue-500/20',
-    queued: 'bg-slate-500/15 text-slate-400 border border-slate-500/20',
-    running: 'bg-blue-500/15 text-blue-400 border border-blue-500/20 animate-pulse',
+    default: 'bg-[#223654]/75 text-[#d6e7ff] border border-[#4a668c]/45',
+    success: 'bg-emerald-500/12 text-emerald-300 border border-emerald-300/28',
+    warning: 'bg-amber-500/12 text-amber-200 border border-amber-300/28',
+    danger: 'bg-rose-500/12 text-rose-200 border border-rose-300/30',
+    info: 'bg-sky-500/12 text-sky-200 border border-sky-300/30',
+    queued: 'bg-slate-500/16 text-slate-300 border border-slate-300/22',
+    running: 'bg-sky-500/16 text-sky-100 border border-sky-300/35 pulse-glow',
   }
+
   return (
-    <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium', styles[variant] || styles.default)}>
+    <span
+      className={clsx(
+        'inline-flex items-center px-4 py-2 rounded-lg text-sm sm:text-base font-semibold tracking-wide',
+        styles[variant] || styles.default
+      )}
+    >
       {children}
     </span>
   )
@@ -27,42 +39,50 @@ export function Badge({ variant = 'default', children }) {
 
 export function StatusBadge({ status }) {
   const map = {
-    completed: ['success', '✓ Done'],
-    running: ['running', '⟳ Running'],
-    queued: ['queued', '· Queued'],
-    error: ['danger', '✕ Error'],
+    completed: ['success', 'Done'],
+    running: ['running', 'Running'],
+    queued: ['queued', 'Queued'],
+    error: ['danger', 'Error'],
   }
   const [variant, label] = map[status] || ['default', status]
   return <Badge variant={variant}>{label}</Badge>
 }
 
 export function ScoreBadge({ score }) {
-  if (score == null) return <span className="text-slate-600 text-xs">—</span>
+  if (score == null) return <span className="text-[#607a9f] text-base">--</span>
   const variant = score >= 90 ? 'success' : score >= 50 ? 'warning' : 'danger'
   return <Badge variant={variant}>{score}</Badge>
 }
 
 export function Skeleton({ className }) {
-  return <div className={clsx('animate-pulse bg-[#334155] rounded', className)} />
+  return <div className={clsx('animate-pulse bg-[#243853] rounded-xl', className)} />
 }
 
 export function Button({ children, variant = 'primary', size = 'md', className, ...props }) {
   const variants = {
-    primary: 'bg-blue-500 hover:bg-blue-600 text-white',
-    secondary: 'bg-[#334155] hover:bg-[#3d4f66] text-slate-200',
-    danger: 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20',
-    ghost: 'hover:bg-[#263348] text-slate-400 hover:text-white',
+    primary: 'bg-gradient-to-r from-[#3f8ef6] to-[#38a6ef] hover:from-[#5ba2ff] hover:to-[#54b8fa] text-white shadow-[0_16px_28px_-16px_rgba(79,156,251,0.9)]',
+    secondary: 'bg-[#223553]/88 hover:bg-[#2a4267] text-[#d8e6fb] border border-[#43628a]/45',
+    danger: 'bg-rose-500/12 hover:bg-rose-500/20 text-rose-200 border border-rose-300/30',
+    ghost: 'hover:bg-[#213352]/85 text-[#c0d2eb] hover:text-white',
   }
   const sizes = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-5 py-2.5 text-sm',
+    sm: 'px-[1.125rem] py-2.5 text-base sm:px-5 sm:py-3',
+    md: 'px-5 py-3 text-base sm:px-6 sm:py-3.5 sm:text-lg',
+    lg: 'px-6 py-3.5 text-lg sm:px-7 sm:py-4 sm:text-xl',
   }
+
   return (
-    <button className={clsx(
-      'inline-flex items-center gap-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
-      variants[variant], sizes[size], className
-    )} {...props}>
+    <button
+      className={clsx(
+        'inline-flex items-center justify-center gap-2 rounded-xl font-medium tracking-wide transition-all duration-200 min-h-[48px] sm:min-h-[54px]',
+        'focus:outline-none focus:ring-2 focus:ring-[#72b3ff]/60 focus:ring-offset-2 focus:ring-offset-[#0a1322]',
+        'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 hover:-translate-y-0.5',
+        variants[variant],
+        sizes[size],
+        className
+      )}
+      {...props}
+    >
       {children}
     </button>
   )
@@ -70,21 +90,27 @@ export function Button({ children, variant = 'primary', size = 'md', className, 
 
 export function Input({ className, ...props }) {
   return (
-    <input className={clsx(
-      'w-full bg-[#0F172A] border border-[#334155] text-slate-200 rounded-lg px-3 py-2 text-sm',
-      'placeholder-slate-600 focus:outline-none focus:border-blue-500 transition-colors',
-      className
-    )} {...props} />
+    <input
+      className={clsx(
+        'w-full bg-[#0d1a2e]/95 border border-[#53739b]/36 text-[#deebff] rounded-xl px-[1.125rem] sm:px-5 py-[0.85rem] sm:py-[0.95rem] text-base sm:text-lg leading-normal',
+        'placeholder-[#97add0] focus:outline-none focus:border-[#72b3ff] focus:ring-2 focus:ring-[#72b3ff]/28 transition-all',
+        className
+      )}
+      {...props}
+    />
   )
 }
 
 export function Select({ className, children, ...props }) {
   return (
-    <select className={clsx(
-      'w-full bg-[#0F172A] border border-[#334155] text-slate-200 rounded-lg px-3 py-2 text-sm',
-      'focus:outline-none focus:border-blue-500 transition-colors',
-      className
-    )} {...props}>
+    <select
+      className={clsx(
+        'w-full bg-[#0d1a2e]/95 border border-[#53739b]/36 text-[#deebff] rounded-xl px-[1.125rem] sm:px-5 py-[0.85rem] sm:py-[0.95rem] text-base sm:text-lg leading-normal',
+        'focus:outline-none focus:border-[#72b3ff] focus:ring-2 focus:ring-[#72b3ff]/28 transition-all',
+        className
+      )}
+      {...props}
+    >
       {children}
     </select>
   )
@@ -92,35 +118,37 @@ export function Select({ className, children, ...props }) {
 
 export function PageHeader({ title, subtitle, action }) {
   return (
-    <div className="flex items-start justify-between mb-6">
+    <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between mb-8 sm:mb-10 reveal-up">
       <div>
-        <h1 className="text-xl font-semibold text-white">{title}</h1>
-        {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
+        <h1 className="text-3xl sm:text-4xl lg:text-[3rem] font-semibold text-white tracking-tight">{title}</h1>
+        {subtitle && <p className="text-base sm:text-lg text-[#c2d6ef] mt-2">{subtitle}</p>}
+        <div className="section-divider mt-4 max-w-72" />
       </div>
-      {action && <div>{action}</div>}
+      {action && <div className="sm:self-start">{action}</div>}
     </div>
   )
 }
 
 export function StatCard({ label, value, sub, icon: Icon, color = 'blue' }) {
   const colors = {
-    blue: 'text-blue-400 bg-blue-500/10',
-    green: 'text-green-400 bg-green-500/10',
-    amber: 'text-amber-400 bg-amber-500/10',
-    red: 'text-red-400 bg-red-500/10',
-    slate: 'text-slate-400 bg-slate-500/10',
+    blue: 'text-sky-200 bg-sky-500/16 border border-sky-300/25',
+    green: 'text-emerald-200 bg-emerald-500/16 border border-emerald-300/25',
+    amber: 'text-amber-200 bg-amber-500/16 border border-amber-300/25',
+    red: 'text-rose-200 bg-rose-500/16 border border-rose-300/25',
+    slate: 'text-slate-200 bg-slate-500/16 border border-slate-300/25',
   }
+
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between">
+    <Card className="p-5 sm:p-6 reveal-up">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{label}</p>
-          <p className="text-2xl font-semibold text-white">{value ?? '—'}</p>
-          {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
+          <p className="text-sm text-[#bed1ea] uppercase tracking-[0.14em] mb-2">{label}</p>
+          <p className="text-3xl sm:text-4xl font-semibold text-white">{value ?? '--'}</p>
+          {sub && <p className="text-base text-[#b4c8e3] mt-2.5">{sub}</p>}
         </div>
         {Icon && (
-          <div className={clsx('w-9 h-9 rounded-lg flex items-center justify-center', colors[color])}>
-            <Icon size={18} />
+          <div className={clsx('w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center soft-float', colors[color])}>
+            <Icon size={23} />
           </div>
         )}
       </div>
@@ -131,11 +159,14 @@ export function StatCard({ label, value, sub, icon: Icon, color = 'blue' }) {
 export function Table({ headers, children, empty = 'No data' }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-base">
         <thead>
-          <tr className="border-b border-[#334155]">
+          <tr className="border-b border-[#3f5d84]/45">
             {headers.map(h => (
-              <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
+              <th
+                key={h}
+                className="text-left px-5 sm:px-7 py-[1.125rem] sm:py-6 text-xs sm:text-sm font-semibold text-[#b8cce8] uppercase tracking-[0.12em] whitespace-nowrap"
+              >
                 {h}
               </th>
             ))}
@@ -144,7 +175,7 @@ export function Table({ headers, children, empty = 'No data' }) {
         <tbody>
           {children || (
             <tr>
-              <td colSpan={headers.length} className="px-4 py-8 text-center text-slate-600 text-sm">
+              <td colSpan={headers.length} className="px-5 sm:px-7 py-11 sm:py-14 text-center text-[#a7bfdd] text-base sm:text-xl">
                 {empty}
               </td>
             </tr>
@@ -157,19 +188,26 @@ export function Table({ headers, children, empty = 'No data' }) {
 
 export function Tabs({ tabs, active, onChange }) {
   return (
-    <div className="flex gap-1 border-b border-[#334155] mb-6">
+    <div className="flex gap-2 border-b border-[#3f5d84]/45 mb-8 sm:mb-10 overflow-x-auto">
       {tabs.map(t => (
-        <button key={t.id} onClick={() => onChange(t.id)}
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
           className={clsx(
-            'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+            'px-[1.125rem] sm:px-6 py-3 sm:py-3.5 text-base sm:text-lg font-medium border-b-2 -mb-px transition-all whitespace-nowrap rounded-t-lg',
             active === t.id
-              ? 'border-blue-500 text-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-300'
-          )}>
+              ? 'border-[#72b3ff] text-[#d9e8ff] bg-[#203351]/65 shadow-[inset_0_1px_0_rgba(182,212,255,0.25)]'
+              : 'border-transparent text-[#aac0dc] hover:text-[#d8e8ff] hover:bg-[#1a2b45]/45'
+          )}
+        >
           {t.label}
           {t.count != null && (
-            <span className={clsx('ml-2 text-xs px-1.5 py-0.5 rounded-full',
-              active === t.id ? 'bg-blue-500/20' : 'bg-[#334155]')}>
+            <span
+              className={clsx(
+                'ml-2 text-sm px-2 py-0.5 rounded-full',
+                active === t.id ? 'bg-[#3a5f8b] text-[#d9e8ff]' : 'bg-[#263b58] text-[#a9bddb]'
+              )}
+            >
               {t.count}
             </span>
           )}
@@ -181,26 +219,31 @@ export function Tabs({ tabs, active, onChange }) {
 
 export function EmptyState({ icon: Icon, title, description }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-[#334155] flex items-center justify-center mb-4">
-        {Icon && <Icon size={24} className="text-slate-500" />}
+    <div className="flex flex-col items-center justify-center py-24 sm:py-28 text-center reveal-up">
+      <div className="w-[72px] h-[72px] sm:w-[84px] sm:h-[84px] rounded-2xl border border-[#4e6f9a]/35 bg-[#1c2f4b]/75 flex items-center justify-center mb-7">
+        {Icon && <Icon size={34} className="text-[#a8bedf]" />}
       </div>
-      <p className="text-white font-medium mb-1">{title}</p>
-      <p className="text-sm text-slate-500 max-w-xs">{description}</p>
+      <p className="text-2xl sm:text-3xl text-white font-medium mb-2">{title}</p>
+      <p className="text-base sm:text-xl text-[#b2c7e1] max-w-xl">{description}</p>
     </div>
   )
 }
 
 export function Toggle({ checked, onChange, label }) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer">
+    <label className="flex items-center gap-4 cursor-pointer">
       <div className="relative">
         <input type="checkbox" className="sr-only" checked={checked} onChange={e => onChange(e.target.checked)} />
-        <div className={clsx('w-9 h-5 rounded-full transition-colors', checked ? 'bg-blue-500' : 'bg-[#334155]')} />
-        <div className={clsx('absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
-          checked ? 'translate-x-4' : 'translate-x-0')} />
+        <div className={clsx('w-14 h-7 rounded-full transition-all', checked ? 'bg-[#4f9cfb]' : 'bg-[#2a446a]')} />
+        <div
+          className={clsx(
+            'absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform',
+            checked ? 'translate-x-7' : 'translate-x-0'
+          )}
+        />
       </div>
-      {label && <span className="text-sm text-slate-400">{label}</span>}
+      {label && <span className="text-base sm:text-lg text-[#c0d4ec]">{label}</span>}
     </label>
   )
 }
+

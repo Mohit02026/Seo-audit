@@ -10,7 +10,7 @@ import GscSettings from './pages/GscSettings'
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth()
-  if (loading) return <div className="min-h-screen bg-[#0F172A]" />
+  if (loading) return <div className="min-h-screen" />
   if (!user) return <Navigate to="/login" replace />
   return <Layout>{children}</Layout>
 }
